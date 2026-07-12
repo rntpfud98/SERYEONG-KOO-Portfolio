@@ -244,6 +244,9 @@ app.post("/api/parse-project-pdf", async (req, res) => {
 
 // Setup Vite Dev Server / Prod Serving
 async function startServer() {
+  // Serve local static assets directly from workspace so dynamic references like "/src/assets/images/..." work in both dev and prod
+  app.use("/src/assets", express.static(path.join(process.cwd(), "src/assets")));
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

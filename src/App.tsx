@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Check,
   Download,
+  Upload,
   Calendar,
   Layers,
   Sparkles,
@@ -94,7 +95,17 @@ export default function App() {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // Deep/shallow merge to guarantee all sections (like 'contact') are present and have default fallbacks
+        return {
+          ...defaultPortfolioData,
+          ...parsed,
+          profile: parsed.profile ? { ...defaultPortfolioData.profile, ...parsed.profile } : defaultPortfolioData.profile,
+          resume: parsed.resume ? { ...defaultPortfolioData.resume, ...parsed.resume } : defaultPortfolioData.resume,
+          contact: parsed.contact ? { ...defaultPortfolioData.contact, ...parsed.contact } : defaultPortfolioData.contact,
+          projects: parsed.projects || defaultPortfolioData.projects,
+          archive: parsed.archive || defaultPortfolioData.archive,
+        };
       } catch (e) {
         console.error('Error parsing stored portfolio database', e);
       }
@@ -117,35 +128,39 @@ export default function App() {
   React.useEffect(() => {
     let migrated = false;
     const migrateData = async () => {
-      const newData = JSON.parse(JSON.stringify(portfolioData));
-      
-      const processString = async (str) => {
-        if (str && str.startsWith('data:image/')) {
-          const key = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          await idbSet(key, str);
-          migrated = true;
-          return `idb://${key}`;
-        }
-        return str;
-      };
-
-      const traverse = async (obj) => {
-        if (!obj) return;
-        for (const k in obj) {
-          if (typeof obj[k] === 'string') {
-            obj[k] = await processString(obj[k]);
-          } else if (typeof obj[k] === 'object') {
-            await traverse(obj[k]);
+      try {
+        const newData = JSON.parse(JSON.stringify(portfolioData));
+        
+        const processString = async (str) => {
+          if (str && str.startsWith('data:image/')) {
+            const key = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            await idbSet(key, str);
+            migrated = true;
+            return `idb://${key}`;
           }
+          return str;
+        };
+
+        const traverse = async (obj) => {
+          if (!obj) return;
+          for (const k in obj) {
+            if (typeof obj[k] === 'string') {
+              obj[k] = await processString(obj[k]);
+            } else if (typeof obj[k] === 'object') {
+              await traverse(obj[k]);
+            }
+          }
+        };
+
+        await traverse(newData);
+
+        if (migrated) {
+          setPortfolioData(newData);
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newData));
+          console.log('Migrated base64 images to IndexedDB');
         }
-      };
-
-      await traverse(newData);
-
-      if (migrated) {
-        setPortfolioData(newData);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newData));
-        console.log('Migrated base64 images to IndexedDB');
+      } catch (error) {
+        console.error('Data migration error safely caught:', error);
       }
     };
 

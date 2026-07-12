@@ -228,10 +228,34 @@ export default function AdminPanel({
       }
       const reader = new FileReader();
       reader.onloadend = async () => {
-        const base64String = reader.result as string;
-        const key = `pdf_${lang}_${Date.now()}`;
-        await idbSet(key, base64String);
-        setContact((prev) => ({ ...prev, [lang === 'ko' ? 'resumePdfUrlKo' : 'resumePdfUrlEn']: `idb://${key}` }));
+        try {
+          const base64String = reader.result as string;
+          const key = `pdf_${lang}_${Date.now()}`;
+          await idbSet(key, base64String);
+          
+          const updatedContact = { 
+            ...contact, 
+            [lang === 'ko' ? 'resumePdfUrlKo' : 'resumePdfUrlEn']: `idb://${key}` 
+          };
+          setContact(updatedContact);
+          
+          // Instantly auto-save all current local states to local storage database
+          const updatedData: PortfolioData = {
+            profile,
+            contact: updatedContact,
+            projects,
+            resume,
+            archive,
+          };
+          onSave(updatedData);
+          
+          showCustomAlert(
+            'Upload & Save Success (업로드 완료)', 
+            `${lang === 'ko' ? '국문' : '영문'} 이력서 PDF 파일이 내 컴퓨터에서 성공적으로 업로드되었으며, 자동으로 안전하게 저장되었습니다!`
+          );
+        } catch (err: any) {
+          showCustomAlert('Upload Error', 'Failed to save uploaded PDF: ' + err.message);
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -992,7 +1016,7 @@ export default function AdminPanel({
                         <span>Upload PDF</span>
                         <input
                           type="file"
-                          accept="application/pdf"
+                          accept=".pdf,application/pdf"
                           onChange={(e) => handleResumePdfUpload(e, 'ko')}
                           className="hidden"
                         />
@@ -1017,7 +1041,7 @@ export default function AdminPanel({
                         <span>Upload PDF</span>
                         <input
                           type="file"
-                          accept="application/pdf"
+                          accept=".pdf,application/pdf"
                           onChange={(e) => handleResumePdfUpload(e, 'en')}
                           className="hidden"
                         />
@@ -1528,7 +1552,7 @@ export default function AdminPanel({
                         <span>Upload PDF</span>
                         <input
                           type="file"
-                          accept="application/pdf"
+                          accept=".pdf,application/pdf"
                           onChange={(e) => handleResumePdfUpload(e, 'ko')}
                           className="hidden"
                         />
@@ -1553,7 +1577,7 @@ export default function AdminPanel({
                         <span>Upload PDF</span>
                         <input
                           type="file"
-                          accept="application/pdf"
+                          accept=".pdf,application/pdf"
                           onChange={(e) => handleResumePdfUpload(e, 'en')}
                           className="hidden"
                         />
