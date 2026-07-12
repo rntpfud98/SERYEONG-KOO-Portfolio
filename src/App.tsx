@@ -126,12 +126,36 @@ export default function App() {
   const [passwordError, setPasswordError] = React.useState<string>('');
 
   React.useEffect(() => {
-    let migrated = false;
-    const migrateData = async () => {
+    const initializeData = async () => {
+      let currentData = { ...portfolioData };
+
+      // 1. Try to load from server first
       try {
-        const newData = JSON.parse(JSON.stringify(portfolioData));
+        const res = await fetch('/api/portfolio-data');
+        if (res.ok) {
+          const serverData = await res.json();
+          if (serverData) {
+            currentData = {
+              ...defaultPortfolioData,
+              ...serverData,
+              profile: serverData.profile ? { ...defaultPortfolioData.profile, ...serverData.profile } : defaultPortfolioData.profile,
+              resume: serverData.resume ? { ...defaultPortfolioData.resume, ...serverData.resume } : defaultPortfolioData.resume,
+              contact: serverData.contact ? { ...defaultPortfolioData.contact, ...serverData.contact } : defaultPortfolioData.contact,
+              projects: serverData.projects || defaultPortfolioData.projects,
+              archive: serverData.archive || defaultPortfolioData.archive,
+            };
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load portfolio data from server:', err);
+      }
+
+      // 2. Perform any needed migrations
+      let migrated = false;
+      try {
+        const newData = JSON.parse(JSON.stringify(currentData));
         
-        const processString = async (str) => {
+        const processString = async (str: string) => {
           if (str && str.startsWith('data:image/')) {
             const key = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             await idbSet(key, str);
@@ -141,7 +165,7 @@ export default function App() {
           return str;
         };
 
-        const traverse = async (obj) => {
+        const traverse = async (obj: any) => {
           if (!obj) return;
           for (const k in obj) {
             if (typeof obj[k] === 'string') {
@@ -158,13 +182,18 @@ export default function App() {
           setPortfolioData(newData);
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newData));
           console.log('Migrated base64 images to IndexedDB');
+        } else {
+          setPortfolioData(currentData);
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentData));
         }
       } catch (error) {
         console.error('Data migration error safely caught:', error);
+        setPortfolioData(currentData);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentData));
       }
     };
 
-    migrateData();
+    initializeData();
   }, []);
 
 
@@ -191,10 +220,19 @@ export default function App() {
     }
   };
 
-  // Sync back to local storage
-  const handleSaveData = (newData: PortfolioData) => {
+  // Sync back to local storage and server
+  const handleSaveData = async (newData: PortfolioData) => {
     setPortfolioData(newData);
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newData));
+    try {
+      await fetch('/api/portfolio-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newData),
+      });
+    } catch (err) {
+      console.error('Error saving portfolio data to server:', err);
+    }
   };
 
   const handleProjectClick = (projectId: string) => {

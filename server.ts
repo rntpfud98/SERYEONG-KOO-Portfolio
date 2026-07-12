@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -242,19 +243,83 @@ app.post("/api/parse-project-pdf", async (req, res) => {
   }
 });
 
+// GET Portfolio Data
+app.get("/api/portfolio-data", (req, res) => {
+  try {
+    const dbPath = path.join(process.cwd(), "src/data/portfolio_db.json");
+    if (fs.existsSync(dbPath)) {
+      const raw = fs.readFileSync(dbPath, "utf-8");
+      return res.json(JSON.parse(raw));
+    }
+    return res.json(null);
+  } catch (err: any) {
+    console.error("Error reading portfolio-data:", err);
+    return res.status(500).json({ error: "Failed to read portfolio data" });
+  }
+});
+
+// POST Portfolio Data
+app.post("/api/portfolio-data", (req, res) => {
+  try {
+    const dbPath = path.join(process.cwd(), "src/data/portfolio_db.json");
+    const dir = path.dirname(dbPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(dbPath, JSON.stringify(req.body, null, 2), "utf-8");
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error writing portfolio-data:", err);
+    return res.status(500).json({ error: "Failed to save portfolio data" });
+  }
+});
+
+// POST Upload File (PDF / Images)
+app.post("/api/upload-file", (req, res) => {
+  try {
+    const { base64Data, filename } = req.body;
+    if (!base64Data || !filename) {
+      return res.status(400).json({ error: "파일 데이터 또는 파일 이름이 유실되었습니다." });
+    }
+
+    const base64Content = base64Data.replace(/^data:[^;]+;base64,/, "");
+    const buffer = Buffer.from(base64Content, "base64");
+
+    const uploadDir = path.join(process.cwd(), "src/assets/uploads");
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    // Clean filename
+    const ext = path.extname(filename);
+    const base = path.basename(filename, ext).replace(/[^a-zA-Z0-9_-]/g, "_");
+    const safeFilename = `${base}_${Date.now()}${ext}`;
+    const targetPath = path.join(uploadDir, safeFilename);
+
+    fs.writeFileSync(targetPath, buffer);
+
+    return res.json({ url: `/src/assets/uploads/${safeFilename}` });
+  } catch (err: any) {
+    console.error("File upload error:", err);
+    return res.status(500).json({ error: err.message || "파일 업로드에 실패했습니다." });
+  }
+});
+
 // Setup Vite Dev Server / Prod Serving
 async function startServer() {
   // Serve local static assets directly from workspace so dynamic references like "/src/assets/images/..." work in both dev and prod
   app.use("/src/assets", express.static(path.join(process.cwd(), "src/assets")));
 
-  if (process.env.NODE_ENV !== "production") {
+  const distPath = path.join(process.cwd(), "dist");
+  const isProduction = process.env.NODE_ENV === "production" || fs.existsSync(path.join(distPath, "index.html"));
+
+  if (!isProduction) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));

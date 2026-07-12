@@ -101,13 +101,23 @@ export default function AdminPanel({
       }
       const reader = new FileReader();
       reader.onloadend = async () => {
-        const base64String = reader.result as string;
-        const key = `img_${Date.now()}`;
-        await idbSet(key, base64String);
-        setProfile((prev) => ({
-          ...prev,
-          [type]: `idb://${key}`,
-        }));
+        try {
+          const base64String = reader.result as string;
+          const res = await fetch('/api/upload-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ base64Data: base64String, filename: file.name }),
+          });
+          if (!res.ok) throw new Error('업로드 실패');
+          const data = await res.json();
+          setProfile((prev) => ({
+            ...prev,
+            [type]: data.url,
+          }));
+        } catch (err) {
+          console.error('Image upload error:', err);
+          alert('이미지 업로드에 실패했습니다.');
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -151,10 +161,20 @@ export default function AdminPanel({
       }
       const reader = new FileReader();
       reader.onloadend = async () => {
-        const base64String = reader.result as string;
-        const key = `img_${Date.now()}`;
-        await idbSet(key, base64String);
-        handleProjectFieldChange(projectId, 'coverImage', `idb://${key}`);
+        try {
+          const base64String = reader.result as string;
+          const res = await fetch('/api/upload-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ base64Data: base64String, filename: file.name }),
+          });
+          if (!res.ok) throw new Error('업로드 실패');
+          const data = await res.json();
+          handleProjectFieldChange(projectId, 'coverImage', data.url);
+        } catch (err) {
+          console.error('Project image upload error:', err);
+          showCustomAlert('Upload Error', 'Failed to upload project image.');
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -181,9 +201,19 @@ export default function AdminPanel({
         reader.readAsDataURL(file);
       });
       const base64String = await base64Promise;
-      const key = `img_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      await idbSet(key, base64String);
-      newImages.push(`idb://${key}`);
+      try {
+        const res = await fetch('/api/upload-file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ base64Data: base64String, filename: file.name }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          newImages.push(data.url);
+        }
+      } catch (err) {
+        console.error('Detail image upload error:', err);
+      }
     }
 
     if (newImages.length > 0) {
@@ -209,10 +239,20 @@ export default function AdminPanel({
       }
       const reader = new FileReader();
       reader.onloadend = async () => {
-        const base64String = reader.result as string;
-        const key = `img_${Date.now()}`;
-        await idbSet(key, base64String);
-        handleArchiveFieldChange(archiveId, 'coverImage', `idb://${key}`);
+        try {
+          const base64String = reader.result as string;
+          const res = await fetch('/api/upload-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ base64Data: base64String, filename: file.name }),
+          });
+          if (!res.ok) throw new Error('업로드 실패');
+          const data = await res.json();
+          handleArchiveFieldChange(archiveId, 'coverImage', data.url);
+        } catch (err) {
+          console.error('Archive image upload error:', err);
+          showCustomAlert('Upload Error', 'Failed to upload archive image.');
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -230,12 +270,17 @@ export default function AdminPanel({
       reader.onloadend = async () => {
         try {
           const base64String = reader.result as string;
-          const key = `pdf_${lang}_${Date.now()}`;
-          await idbSet(key, base64String);
+          const res = await fetch('/api/upload-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ base64Data: base64String, filename: file.name }),
+          });
+          if (!res.ok) throw new Error('업로드 실패');
+          const data = await res.json();
           
           const updatedContact = { 
             ...contact, 
-            [lang === 'ko' ? 'resumePdfUrlKo' : 'resumePdfUrlEn']: `idb://${key}` 
+            [lang === 'ko' ? 'resumePdfUrlKo' : 'resumePdfUrlEn']: data.url 
           };
           setContact(updatedContact);
           
